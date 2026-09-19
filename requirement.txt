@@ -7,3 +7,4 @@ requests
 xgboost
 scikit-learn
 imbalanced-learn
+python-3.11.0
