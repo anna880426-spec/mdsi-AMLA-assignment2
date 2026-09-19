@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+joblib
+pandas
+numpy
+requests
+xgboost
+scikit-learn
+imbalanced-learn
