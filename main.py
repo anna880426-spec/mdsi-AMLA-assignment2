@@ -48,7 +48,7 @@ whc_feature_importance = dict(
         key=lambda x: x[1],
         reverse=True
     )
-
+)
 
 
 # GET /
