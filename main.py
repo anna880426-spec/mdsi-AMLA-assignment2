@@ -34,6 +34,23 @@ with open("whc_feature_cols.json", "r") as f:
 
 
 
+cci_feature_importance = dict(
+    sorted(
+        zip(cci_feature_cols, cci_model_T1.feature_importances_.tolist()),
+        key=lambda x: x[1],
+        reverse=True
+    )
+)
+
+whc_feature_importance = dict(
+    sorted(
+        zip(whc_feature_cols, whc_model.feature_importances_.tolist()),
+        key=lambda x: x[1],
+        reverse=True
+    )
+
+
+
 # GET /
 @app.get("/")
 def root():
@@ -69,21 +86,35 @@ def health():
 # GET /model-metadata
 @app.get("/model-metadata")
 def model_metadata():
-    return {
-        "cci_model": {
-            "type": "XGBRegressor",
-            "targets": ["T+1", "T+2", "T+3"],
-            "features": len(cci_feature_cols),
-            "training_data": "Sydney, Australia (2010-2025)"
+    return [
+        {
+            "target": "Climate Comfort Index (CCI)",
+            "prediction_type": "Regression",
+            "algorithm": "XGBoost Regressor",
+            "forecast_horizon": "T+1, T+2, T+3 (1-3 days ahead)",
+            "features": cci_feature_cols,
+            "feature_importance": cci_feature_importance,  
+            "model_performance": {
+                "T+1_MAE": 6.33,
+                "T+2_MAE": 7.57,
+                "T+3_MAE": 7.70
+            }
         },
-        "whc_model": {
-            "type": "RandomForestClassifier",
-            "target": "T+7",
-            "features": len(whc_feature_cols),
+        {
+            "target": "Weather Hazard Category (WHC)",
+            "prediction_type": "Multiclass Classification",
+            "algorithm": "Random Forest Classifier",
+            "forecast_horizon": "T+7 (exactly 7 days ahead)",
+            "features": whc_feature_cols,
+            "feature_importance": whc_feature_importance, 
             "classes": ["Low Risk", "Moderate Risk", "High Risk", "Extreme Risk"],
-            "training_data": "Sydney, Australia (2010-2025)"
+            "model_performance": {
+                "F1_Macro": 0.2888,
+                "Accuracy": 0.4726,
+                "High_Risk_Recall": 0.35
+            }
         }
-    }
+    ]
 
 
 
@@ -308,4 +339,3 @@ def predict_whc(input: DateInput):
             }
         }
     }
-
