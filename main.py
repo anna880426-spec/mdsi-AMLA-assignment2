@@ -54,6 +54,7 @@ def root():
 def health():
     return {
         "status": "healthy",
+        "message": "Weather Intelligence API is running",
         "timestamp": datetime.now().isoformat(),
         "models_loaded": {
             "cci_T1": cci_model_T1 is not None,
@@ -239,13 +240,17 @@ def predict_cci(input: DateInput):
     
     # get last row
     last_row = df.iloc[-1][cci_feature_cols].values.reshape(1, -1)
+
     
+    date = datetime.strptime(input.date, "%Y-%m-%d")
     return {
-        "date": input.date,
+        "input_date": input.date,
         "predictions": {
-            "T+1": round(float(cci_model_T1.predict(last_row)[0]), 2),
-            "T+2": round(float(cci_model_T2.predict(last_row)[0]), 2),
-            "T+3": round(float(cci_model_T3.predict(last_row)[0]), 2)
+            "comfort_climate": {
+                (date + timedelta(days=1)).strftime("%Y-%m-%d"): round(float(cci_model_T1.predict(last_row)[0]), 2),
+                (date + timedelta(days=2)).strftime("%Y-%m-%d"): round(float(cci_model_T2.predict(last_row)[0]), 2),
+                (date + timedelta(days=3)).strftime("%Y-%m-%d"): round(float(cci_model_T3.predict(last_row)[0]), 2)
+            }
         }
     }
 
@@ -314,9 +319,11 @@ def predict_whc(input: DateInput):
     }
     
     return {
-        "date": input.date,
-        "prediction_date": (end + timedelta(days=7)).strftime("%Y-%m-%d"),
-        "WHC": prediction,
-        "category": whc_labels[prediction]
+        "input_date": input.date,
+        "predictions": {
+            "weather_hazard": {
+                (end + timedelta(days=7)).strftime("%Y-%m-%d"): whc_labels[prediction]
+            }
+        }
     }
 
