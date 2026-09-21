@@ -90,33 +90,6 @@ def model_metadata():
 class DateInput(BaseModel):
     date: str  # format: YYYY-MM-DD
 
-def fetch_weather_data(end_date: str):
-    """get past 30 days' data from  Open-Meteo"""
-    end = datetime.strptime(end_date, "%Y-%m-%d")
-    start = end - timedelta(days=30)
-    
-    params = {
-        "latitude": -33.8688,
-        "longitude": 151.2093,
-        "start_date": start.strftime("%Y-%m-%d"),
-        "end_date": end_date,
-        "daily": [
-            "temperature_2m_mean", "temperature_2m_max", "temperature_2m_min",
-            "apparent_temperature_mean", "relative_humidity_2m_mean",
-            "wind_speed_10m_mean", "wind_direction_10m_dominant", 
-            "cloud_cover_mean", "precipitation_sum",
-            "wind_gusts_10m_max", "snowfall_sum", "sunshine_duration",
-            "daylight_duration"
-        ],
-        "timezone": "Australia/Sydney"
-    }
-    
-    response = requests.get("https://archive-api.open-meteo.com/v1/archive", params=params)
-    data = response.json()
-    df = pd.DataFrame(data["daily"])
-    df["time"] = pd.to_datetime(df["time"])
-    return df
-
 
 
 
@@ -159,7 +132,14 @@ def fetch_weather_data(end_date: str):
         "longitude": 151.2093,
         "start_date": start.strftime("%Y-%m-%d"),
         "end_date": end_date,
-        "daily": [...],
+        "daily": [
+            "temperature_2m_mean", "temperature_2m_max", "temperature_2m_min",
+            "apparent_temperature_mean", "relative_humidity_2m_mean",
+            "wind_speed_10m_mean", "wind_direction_10m_dominant",
+            "cloud_cover_mean", "precipitation_sum",
+            "wind_gusts_10m_max", "snowfall_sum", "sunshine_duration",
+            "daylight_duration"
+        ],
         "timezone": "Australia/Sydney"
     }
     
@@ -167,7 +147,7 @@ def fetch_weather_data(end_date: str):
         response = requests.get(
             "https://archive-api.open-meteo.com/v1/archive", 
             params=params,
-            timeout=10  # 10 seconds timeout
+            timeout=10
         )
         response.raise_for_status()
     except Timeout:
@@ -186,7 +166,9 @@ def fetch_weather_data(end_date: str):
             detail="Failed to fetch weather data from Open-Meteo API. Please try again later."
         )
     
-    return pd.DataFrame(response.json()["daily"])
+    df = pd.DataFrame(response.json()["daily"])
+    df["time"] = pd.to_datetime(df["time"])
+    return df
 
 
 @app.post("/predict/index/comfort_climate")
