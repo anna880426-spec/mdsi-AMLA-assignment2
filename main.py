@@ -3,6 +3,15 @@ from fastapi import FastAPI
 from datetime import datetime
 import joblib
 import json
+from pydantic import BaseModel
+import requests
+import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+from fastapi import HTTPException
+from datetime import datetime
+import requests
+from requests.exceptions import Timeout, ConnectionError
 
 app = FastAPI(
     title="Weather Intelligence API",
@@ -23,9 +32,9 @@ with open("cci_feature_cols.json", "r") as f:
 with open("whc_feature_cols.json", "r") as f:
     whc_feature_cols = json.load(f)
 
-# ============================================================
+
+
 # GET /
-# ============================================================
 @app.get("/")
 def root():
     return {
@@ -39,9 +48,8 @@ def root():
         }
     }
 
-# ============================================================
+
 # GET /health
-# ============================================================
 @app.get("/health")
 def health():
     return {
@@ -55,9 +63,9 @@ def health():
         }
     }
 
-# ============================================================
+
+
 # GET /model-metadata
-# ============================================================
 @app.get("/model-metadata")
 def model_metadata():
     return {
@@ -76,19 +84,13 @@ def model_metadata():
         }
     }
 
-#------------------------------
 
-from pydantic import BaseModel
-import requests
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
 
 class DateInput(BaseModel):
     date: str  # format: YYYY-MM-DD
 
 def fetch_weather_data(end_date: str):
-    """從 Open-Meteo 抓取過去 30 天的天氣資料"""
+    """get past 30 days' data from  Open-Meteo"""
     end = datetime.strptime(end_date, "%Y-%m-%d")
     start = end - timedelta(days=30)
     
@@ -100,7 +102,7 @@ def fetch_weather_data(end_date: str):
         "daily": [
             "temperature_2m_mean", "temperature_2m_max", "temperature_2m_min",
             "apparent_temperature_mean", "relative_humidity_2m_mean",
-            "wind_speed_10m_mean", "wind_direction_10m_dominant",  # 加這個！
+            "wind_speed_10m_mean", "wind_direction_10m_dominant", 
             "cloud_cover_mean", "precipitation_sum",
             "wind_gusts_10m_max", "snowfall_sum", "sunshine_duration",
             "daylight_duration"
@@ -114,16 +116,89 @@ def fetch_weather_data(end_date: str):
     df["time"] = pd.to_datetime(df["time"])
     return df
 
+
+
+
+# check date
+def validate_date(date_str: str):
+    try:
+        date = datetime.strptime(date_str, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid date format. Please use YYYY-MM-DD format (e.g. 2025-01-01)."
+        )
+    
+    # check date, can't be today or furture day
+    if date >= datetime.now():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Date must be in the past. Please provide a date before today ({datetime.now().strftime('%Y-%m-%d')})."
+        )
+    
+    yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+
+    if date < datetime(2010, 1, 15):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Date out of range. The available data spans from 2010-01-15 to {yesterday}. Please provide a date within this range."
+        )
+    
+    return date
+
+
+
+
+def fetch_weather_data(end_date: str):
+    end = datetime.strptime(end_date, "%Y-%m-%d")
+    start = end - timedelta(days=30)
+    
+    params = {
+        "latitude": -33.8688,
+        "longitude": 151.2093,
+        "start_date": start.strftime("%Y-%m-%d"),
+        "end_date": end_date,
+        "daily": [...],
+        "timezone": "Australia/Sydney"
+    }
+    
+    try:
+        response = requests.get(
+            "https://archive-api.open-meteo.com/v1/archive", 
+            params=params,
+            timeout=10  # 10 seconds timeout
+        )
+        response.raise_for_status()
+    except Timeout:
+        raise HTTPException(
+            status_code=504,
+            detail="Request to Open-Meteo API timed out. Please try again later."
+        )
+    except ConnectionError:
+        raise HTTPException(
+            status_code=503,
+            detail="Failed to connect to Open-Meteo API. Please check your internet connection and try again."
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="Failed to fetch weather data from Open-Meteo API. Please try again later."
+        )
+    
+    return pd.DataFrame(response.json()["daily"])
+
+
 @app.post("/predict/index/comfort_climate")
 def predict_cci(input: DateInput):
-    # 抓資料
+    validate_date(input.date)
+    # get data
     df = fetch_weather_data(input.date)
     
-    # 計算 lag features
+    # compute lag features
     raw_cols = [
         "temperature_2m_mean", "temperature_2m_max", "temperature_2m_min",
         "apparent_temperature_mean", "relative_humidity_2m_mean",
-        "wind_speed_10m_mean", "wind_direction_10m_dominant",  # 加這個！
+        "wind_speed_10m_mean", "wind_direction_10m_dominant",  
         "cloud_cover_mean", "precipitation_sum",
         "wind_gusts_10m_max", "snowfall_sum", "sunshine_duration",
         "daylight_duration"
@@ -162,7 +237,7 @@ def predict_cci(input: DateInput):
         rainy.groupby((~rainy).cumsum()).cumcount()
     )
     
-    # 取最後一筆
+    # get last row
     last_row = df.iloc[-1][cci_feature_cols].values.reshape(1, -1)
     
     return {
@@ -176,11 +251,11 @@ def predict_cci(input: DateInput):
 
 
 
-#-------------------------------------------------------------------------
 
 @app.post("/predict/category/weather_hazard")
 def predict_whc(input: DateInput):
-    # 抓資料
+    validate_date(input.date)
+    # get data
     end = datetime.strptime(input.date, "%Y-%m-%d")
     start = end - timedelta(days=30)
     
@@ -244,3 +319,4 @@ def predict_whc(input: DateInput):
         "WHC": prediction,
         "category": whc_labels[prediction]
     }
+
